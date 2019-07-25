@@ -1,41 +1,58 @@
 var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
-
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
-
-var app = express();
-
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'jade');
-
-app.use(logger('dev'));
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
-
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
-
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
+const express = require('express');
+const path = require('path');
+const cookieParser = require('cookie-parser');
+const logger = require('morgan');
+const config = require('./statics/config').config;
+const mongoose = require('mongoose')
+///
+const app = express();
+var server = require('http').createServer(app).listen(config.port, function(){
+  console.log("Express server listening on port " + config.port);
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+var io = require('socket.io').listen(server);
+///
+const game = {};
+///
+app.use(express.static(path.join(__dirname,'public')));
+app.use(express.static(path.join(__dirname,'node_modules')));
+app.set('views', __dirname + '/views');
+app.set('view engine', 'ejs');
+app.engine('html', require('ejs').renderFile);
 
-  // render the error page
-  res.status(err.status || 500);
-  res.render('error');
+///
+app.get('/test',(req,res)=> {
+  //res.send("aa");
+  res.sendFile(__dirname + '/test.html');
+})
+
+
+
+mongoose.connect(`mongodb://localhost:27017/${config.db.name}`, {
+	useNewUrlParser: true
 });
+
+const userSchema = mongoose.Schema({
+	  name: String
+});
+
+const userModel = mongoose.model("user", userSchema);
+
+
+io.set('origins', '*:*')
+io.on('connection', socket => {
+    //console.log(socket, ": connected")
+    
+    // 접속한 클라이언트의 정보가 수신되면
+    socket.on('hello', function(data) {
+      console.log('Client logged-in:\n name:' + data.name);
+      // 접속된 모든 클라이언트에게 메시지를 전송한다
+      io.emit('hello', data.name );
+    });
+
+    socket.on('disconnection',()=> {console.log("bye")})
+})
+
 
 module.exports = app;
